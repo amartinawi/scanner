@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   Calendar, 
   Globe, 
@@ -13,11 +15,16 @@ import {
   Eye, 
   Settings,
   CreditCard,
-  BarChart3
+  BarChart3,
+  Plus,
+  RefreshCw
 } from "lucide-react";
+import { showSuccess, showError } from "@/utils/toast";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
-  const [user] = useState({
+  const navigate = useNavigate();
+  const [user, setUser] = useState({
     name: "John Doe",
     email: "john@example.com",
     plan: "Pro",
@@ -25,9 +32,9 @@ const Dashboard = () => {
     scansLimit: 10
   });
 
-  const [scanHistory] = useState([
+  const [scanHistory, setScanHistory] = useState([
     {
-      id: 1,
+      id: "scan-001",
       url: "https://example.com",
       date: "2024-01-15",
       score: 78,
@@ -35,7 +42,7 @@ const Dashboard = () => {
       status: "completed"
     },
     {
-      id: 2,
+      id: "scan-002", 
       url: "https://mystore.com",
       date: "2024-01-14",
       score: 85,
@@ -43,7 +50,7 @@ const Dashboard = () => {
       status: "completed"
     },
     {
-      id: 3,
+      id: "scan-003",
       url: "https://portfolio.dev",
       date: "2024-01-12",
       score: 92,
@@ -52,16 +59,76 @@ const Dashboard = () => {
     }
   ]);
 
-  const getScoreColor = (score) => {
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: user.name,
+    email: user.email
+  });
+
+  const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-600";
     if (score >= 70) return "text-yellow-600";
     return "text-red-600";
   };
 
-  const getScoreBadge = (score) => {
+  const getScoreBadge = (score: number) => {
     if (score >= 90) return "default";
     if (score >= 70) return "secondary";
     return "destructive";
+  };
+
+  const handleViewScan = (scanId: string) => {
+    navigate(`/scan/${scanId}`);
+  };
+
+  const handleDownloadPDF = (scanId: string, url: string) => {
+    showSuccess(`Generating PDF report for ${url}...`);
+    setTimeout(() => {
+      showSuccess("PDF report downloaded successfully!");
+    }, 2000);
+  };
+
+  const handleNewScan = () => {
+    navigate('/');
+  };
+
+  const handleRefreshScans = () => {
+    showSuccess("Refreshing scan history...");
+    // In real app, this would fetch latest data from API
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!profileData.name.trim() || !profileData.email.trim()) {
+      showError("Please fill in all fields");
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      setUser(prev => ({
+        ...prev,
+        name: profileData.name,
+        email: profileData.email
+      }));
+      setIsUpdatingProfile(false);
+      showSuccess("Profile updated successfully!");
+    }, 1500);
+  };
+
+  const handleChangePlan = () => {
+    navigate('/pricing');
+  };
+
+  const handleUpdatePayment = () => {
+    showSuccess("Redirecting to payment settings...");
+    // In real app, this would open Stripe billing portal or payment form
+  };
+
+  const handleChangePhoto = () => {
+    showSuccess("Photo upload feature coming soon!");
+    // In real app, this would open file picker
   };
 
   return (
@@ -72,13 +139,13 @@ const Dashboard = () => {
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => navigate('/pricing')}>
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
               </Button>
               <Avatar>
                 <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>JD</AvatarFallback>
+                <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
               </Avatar>
             </div>
           </div>
@@ -133,7 +200,9 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg Score</p>
-                  <p className="text-2xl font-bold">85</p>
+                  <p className="text-2xl font-bold">
+                    {Math.round(scanHistory.reduce((sum, scan) => sum + scan.score, 0) / scanHistory.length)}
+                  </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-orange-600" />
               </div>
@@ -152,15 +221,29 @@ const Dashboard = () => {
           <TabsContent value="scans">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Scans</CardTitle>
-                <CardDescription>
-                  View and manage your accessibility scan history
-                </CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Recent Scans</CardTitle>
+                    <CardDescription>
+                      View and manage your accessibility scan history
+                    </CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={handleRefreshScans}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Refresh
+                    </Button>
+                    <Button onClick={handleNewScan}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      New Scan
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {scanHistory.map((scan) => (
-                    <div key={scan.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={scan.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                       <div className="flex items-center space-x-4">
                         <Globe className="w-8 h-8 text-gray-400" />
                         <div>
@@ -183,11 +266,19 @@ const Dashboard = () => {
                         </div>
                         
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleViewScan(scan.id)}
+                          >
                             <Eye className="w-4 h-4 mr-2" />
                             View
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDownloadPDF(scan.id, scan.url)}
+                          >
                             <Download className="w-4 h-4 mr-2" />
                             PDF
                           </Button>
@@ -212,39 +303,46 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <Avatar className="w-16 h-16">
                     <AvatarImage src="/placeholder.svg" />
-                    <AvatarFallback>JD</AvatarFallback>
+                    <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                   </Avatar>
                   <div>
                     <h3 className="text-lg font-medium">{user.name}</h3>
                     <p className="text-gray-500">{user.email}</p>
                   </div>
-                  <Button variant="outline">Change Photo</Button>
+                  <Button variant="outline" onClick={handleChangePhoto}>
+                    Change Photo
+                  </Button>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name
-                    </label>
-                    <input 
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input 
+                      id="name"
                       type="text" 
-                      defaultValue={user.name}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      value={profileData.name}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
+                      className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Address
-                    </label>
-                    <input 
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input 
+                      id="email"
                       type="email" 
-                      defaultValue={user.email}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      value={profileData.email}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                      className="mt-1"
                     />
                   </div>
                 </div>
                 
-                <Button>Save Changes</Button>
+                <Button 
+                  onClick={handleUpdateProfile}
+                  disabled={isUpdatingProfile}
+                >
+                  {isUpdatingProfile ? "Saving..." : "Save Changes"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -266,7 +364,9 @@ const Dashboard = () => {
                         $19/month • Renews on Feb 15, 2024
                       </p>
                     </div>
-                    <Button variant="outline">Change Plan</Button>
+                    <Button variant="outline" onClick={handleChangePlan}>
+                      Change Plan
+                    </Button>
                   </div>
                 </div>
                 
@@ -291,7 +391,9 @@ const Dashboard = () => {
                         <p className="text-sm text-gray-500">Expires 12/25</p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">Update</Button>
+                    <Button variant="outline" size="sm" onClick={handleUpdatePayment}>
+                      Update
+                    </Button>
                   </div>
                 </div>
               </CardContent>

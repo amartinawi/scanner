@@ -5,101 +5,76 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Globe, Zap, Shield, Download } from "lucide-react";
+import { AlertCircle, CheckCircle, Globe, Zap, Shield, Download, ArrowRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { Link, useNavigate } from "react-router-dom";
+import ScannerEngine from "@/components/ScannerEngine";
+import ReportViewer from "@/components/ReportViewer";
+
+interface ScanResult {
+  url: string;
+  score: number;
+  totalIssues: number;
+  critical: number;
+  serious: number;
+  moderate: number;
+  minor: number;
+  pagesScanned: number;
+  issues: Array<{
+    id: string;
+    severity: 'critical' | 'serious' | 'moderate' | 'minor';
+    rule: string;
+    description: string;
+    element: string;
+    page: string;
+    fix: string;
+    wcagLevel: string;
+  }>;
+  timestamp: string;
+}
 
 const Index = () => {
-  const [url, setUrl] = useState("");
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResults, setScanResults] = useState(null);
-  const [scanProgress, setScanProgress] = useState(0);
+  const [scanResults, setScanResults] = useState<ScanResult | null>(null);
+  const navigate = useNavigate();
 
-  const handleScan = async () => {
-    if (!url) {
-      showError("Please enter a valid URL");
-      return;
-    }
-
-    setIsScanning(true);
-    setScanProgress(0);
-    
-    // Simulate scanning progress
-    const progressInterval = setInterval(() => {
-      setScanProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 500);
-
-    // Simulate API call
+  const handleScanComplete = (results: ScanResult) => {
+    setScanResults(results);
+    // Scroll to results
     setTimeout(() => {
-      clearInterval(progressInterval);
-      setScanProgress(100);
-      
-      // Mock scan results
-      const mockResults = {
-        url: url,
-        score: 78,
-        totalIssues: 12,
-        critical: 2,
-        serious: 4,
-        moderate: 4,
-        minor: 2,
-        pagesScanned: 3,
-        issues: [
-          {
-            id: 1,
-            severity: "critical",
-            rule: "color-contrast",
-            description: "Elements must have sufficient color contrast",
-            element: "button.primary",
-            page: "/",
-            fix: "Increase contrast ratio to at least 4.5:1"
-          },
-          {
-            id: 2,
-            severity: "serious",
-            rule: "alt-text",
-            description: "Images must have alternative text",
-            element: "img.hero-image",
-            page: "/about",
-            fix: "Add descriptive alt attribute to image"
-          },
-          {
-            id: 3,
-            severity: "moderate",
-            rule: "heading-order",
-            description: "Heading levels should only increase by one",
-            element: "h3.section-title",
-            page: "/services",
-            fix: "Change h3 to h2 or add intermediate h2"
-          }
-        ]
-      };
-      
-      setScanResults(mockResults);
-      setIsScanning(false);
-      showSuccess("Scan completed successfully!");
-    }, 3000);
+      const resultsElement = document.getElementById('scan-results');
+      if (resultsElement) {
+        resultsElement.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
   };
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case "critical": return "destructive";
-      case "serious": return "destructive";
-      case "moderate": return "secondary";
-      case "minor": return "outline";
-      default: return "outline";
-    }
+  const handleDownloadPDF = () => {
+    if (!scanResults) return;
+    
+    // In a real app, this would generate and download a PDF
+    showSuccess("PDF report generation started. Download will begin shortly.");
+    
+    // Simulate PDF generation
+    setTimeout(() => {
+      showSuccess("PDF report downloaded successfully!");
+    }, 2000);
   };
 
-  const getSeverityIcon = (severity) => {
-    return severity === "critical" || severity === "serious" ? 
-      <AlertCircle className="w-4 h-4" /> : 
-      <CheckCircle className="w-4 h-4" />;
+  const handleGetStarted = () => {
+    navigate('/signup');
+  };
+
+  const handleSignIn = () => {
+    navigate('/login');
+  };
+
+  const handleStartFreeTrial = () => {
+    navigate('/signup');
+  };
+
+  const handleContactSales = () => {
+    showSuccess("Redirecting to contact form...");
+    // In real app: navigate('/contact') or open contact modal
   };
 
   return (
@@ -113,8 +88,8 @@ const Index = () => {
               <h1 className="text-2xl font-bold text-gray-900">AccessScan</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost">Sign In</Button>
-              <Button>Get Started</Button>
+              <Button variant="ghost" onClick={handleSignIn}>Sign In</Button>
+              <Button onClick={handleGetStarted}>Get Started</Button>
             </div>
           </div>
         </div>
@@ -131,173 +106,23 @@ const Index = () => {
             to improve accessibility for all users.
           </p>
           
-          {/* Scanner Input */}
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-center space-x-2">
-                <Globe className="w-5 h-5" />
-                <span>Free Accessibility Scan</span>
-              </CardTitle>
-              <CardDescription>
-                Enter your website URL to get started with a free accessibility audit
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex space-x-2">
-                <Input
-                  type="url"
-                  placeholder="https://example.com"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={handleScan} 
-                  disabled={isScanning}
-                  className="px-8"
-                >
-                  {isScanning ? (
-                    <>
-                      <Zap className="w-4 h-4 mr-2 animate-spin" />
-                      Scanning...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 mr-2" />
-                      Scan Now
-                    </>
-                  )}
-                </Button>
-              </div>
-              
-              {isScanning && (
-                <div className="mt-4">
-                  <Progress value={scanProgress} className="w-full" />
-                  <p className="text-sm text-gray-600 mt-2">
-                    Scanning your website for accessibility issues...
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Scanner Component */}
+          <ScannerEngine onScanComplete={handleScanComplete} maxPages={3} />
         </div>
 
         {/* Scan Results */}
         {scanResults && (
-          <div className="mb-12">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-2xl">Scan Results</CardTitle>
-                    <CardDescription className="text-lg">
-                      {scanResults.url} • {scanResults.pagesScanned} pages scanned
-                    </CardDescription>
-                  </div>
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download PDF
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Score Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-                  <Card className="text-center">
-                    <CardContent className="pt-6">
-                      <div className="text-3xl font-bold text-blue-600 mb-2">
-                        {scanResults.score}
-                      </div>
-                      <p className="text-sm text-gray-600">Accessibility Score</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="text-center">
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-red-600 mb-2">
-                        {scanResults.critical}
-                      </div>
-                      <p className="text-sm text-gray-600">Critical Issues</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="text-center">
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-orange-600 mb-2">
-                        {scanResults.serious}
-                      </div>
-                      <p className="text-sm text-gray-600">Serious Issues</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="text-center">
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-yellow-600 mb-2">
-                        {scanResults.moderate}
-                      </div>
-                      <p className="text-sm text-gray-600">Moderate Issues</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="text-center">
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-green-600 mb-2">
-                        {scanResults.minor}
-                      </div>
-                      <p className="text-sm text-gray-600">Minor Issues</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Issues List */}
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="all">All Issues</TabsTrigger>
-                    <TabsTrigger value="critical">Critical</TabsTrigger>
-                    <TabsTrigger value="serious">Serious</TabsTrigger>
-                    <TabsTrigger value="moderate">Moderate</TabsTrigger>
-                    <TabsTrigger value="minor">Minor</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="all" className="space-y-4">
-                    {scanResults.issues.map((issue) => (
-                      <Card key={issue.id}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-2">
-                                {getSeverityIcon(issue.severity)}
-                                <Badge variant={getSeverityColor(issue.severity)}>
-                                  {issue.severity.toUpperCase()}
-                                </Badge>
-                                <span className="text-sm text-gray-500">
-                                  {issue.rule}
-                                </span>
-                              </div>
-                              <h4 className="font-semibold mb-2">{issue.description}</h4>
-                              <div className="text-sm text-gray-600 mb-2">
-                                <strong>Element:</strong> <code className="bg-gray-100 px-1 rounded">{issue.element}</code>
-                              </div>
-                              <div className="text-sm text-gray-600 mb-2">
-                                <strong>Page:</strong> {issue.page}
-                              </div>
-                              <div className="text-sm">
-                                <strong>How to fix:</strong> {issue.fix}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+          <div id="scan-results" className="mb-12">
+            <ReportViewer 
+              results={scanResults} 
+              onDownloadPDF={handleDownloadPDF}
+              onShare={() => showSuccess("Report link copied to clipboard!")}
+            />
           </div>
         )}
 
         {/* Features Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+        <div id="features" className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -307,7 +132,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600">
-                Get comprehensive accessibility reports in seconds using industry-standard tools.
+                Get comprehensive accessibility reports in seconds using industry-standard tools like axe-core.
               </p>
             </CardContent>
           </Card>
@@ -353,34 +178,38 @@ const Index = () => {
                 <div className="text-3xl font-bold">$0</div>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2 text-sm mb-6">
                   <li>• 1 scan per month</li>
                   <li>• Up to 3 pages</li>
-                  <li>• Basic report</li>
+                  <li>• Basic web report</li>
                   <li>• Email support</li>
                 </ul>
-                <Button className="w-full mt-4" variant="outline">
-                  Get Started
+                <Button className="w-full" variant="outline" onClick={handleGetStarted}>
+                  Get Started Free
                 </Button>
               </CardContent>
             </Card>
             
-            <Card className="border-blue-500 border-2">
+            <Card className="border-blue-500 border-2 relative">
+              <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600">
+                Most Popular
+              </Badge>
               <CardHeader>
                 <CardTitle>Pro</CardTitle>
                 <CardDescription>For small businesses</CardDescription>
                 <div className="text-3xl font-bold">$19<span className="text-sm">/month</span></div>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2 text-sm mb-6">
                   <li>• 10 scans per month</li>
                   <li>• Up to 25 pages</li>
                   <li>• PDF reports</li>
                   <li>• Scan history</li>
                   <li>• Priority support</li>
                 </ul>
-                <Button className="w-full mt-4">
+                <Button className="w-full" onClick={handleStartFreeTrial}>
                   Start Free Trial
+                  <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </CardContent>
             </Card>
@@ -392,18 +221,40 @@ const Index = () => {
                 <div className="text-3xl font-bold">$49<span className="text-sm">/month</span></div>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2 text-sm mb-6">
                   <li>• Unlimited scans</li>
                   <li>• Unlimited pages</li>
                   <li>• White-label reports</li>
                   <li>• Team collaboration</li>
                   <li>• API access</li>
                 </ul>
-                <Button className="w-full mt-4" variant="outline">
+                <Button className="w-full" variant="outline" onClick={handleContactSales}>
                   Contact Sales
                 </Button>
               </CardContent>
             </Card>
+          </div>
+          
+          <div className="mt-8">
+            <Link to="/pricing">
+              <Button variant="ghost" className="text-blue-600">
+                View detailed pricing comparison
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Social Proof */}
+        <div className="text-center mb-12">
+          <h3 className="text-2xl font-bold text-gray-900 mb-8">
+            Trusted by thousands of websites
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center opacity-60">
+            <div className="text-2xl font-bold text-gray-400">TechCorp</div>
+            <div className="text-2xl font-bold text-gray-400">StartupXYZ</div>
+            <div className="text-2xl font-bold text-gray-400">NonProfit</div>
+            <div className="text-2xl font-bold text-gray-400">Agency Co</div>
           </div>
         </div>
       </main>
@@ -425,27 +276,27 @@ const Index = () => {
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>Features</li>
-                <li>Pricing</li>
-                <li>API</li>
+                <li><Link to="/pricing" className="hover:text-white">Pricing</Link></li>
+                <li><a href="#features" className="hover:text-white">Features</a></li>
+                <li><button className="hover:text-white">API</button></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Resources</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>Documentation</li>
-                <li>WCAG Guidelines</li>
-                <li>Blog</li>
+                <li><button className="hover:text-white">Documentation</button></li>
+                <li><button className="hover:text-white">WCAG Guidelines</button></li>
+                <li><button className="hover:text-white">Blog</button></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>Help Center</li>
-                <li>Contact Us</li>
-                <li>Status</li>
+                <li><button className="hover:text-white">Help Center</button></li>
+                <li><button className="hover:text-white">Contact Us</button></li>
+                <li><button className="hover:text-white">Status</button></li>
               </ul>
             </div>
           </div>
