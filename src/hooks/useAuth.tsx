@@ -160,11 +160,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    console.log('SignIn attempt:', { email, password });
+    
     // Handle demo credentials with frontend-only authentication
     if (email === 'admin@accessscan.com' && password === 'admin123') {
+      console.log('Demo admin login detected');
       const demoProfile = DEMO_USERS[email];
+      
+      // Set profile first
       setProfile(demoProfile);
-      setUser({
+      console.log('Demo profile set:', demoProfile);
+      
+      // Create demo user object
+      const demoUser = {
         id: demoProfile.id,
         email: demoProfile.email,
         user_metadata: { full_name: demoProfile.full_name },
@@ -172,29 +180,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         aud: 'authenticated',
         created_at: demoProfile.created_at,
         updated_at: demoProfile.updated_at
-      } as User);
-      setSession({
+      } as User;
+      
+      setUser(demoUser);
+      console.log('Demo user set:', demoUser);
+      
+      // Create demo session
+      const demoSession = {
         access_token: 'demo-admin-token',
         refresh_token: 'demo-admin-refresh',
         expires_in: 3600,
         token_type: 'bearer',
-        user: {
-          id: demoProfile.id,
-          email: demoProfile.email,
-          user_metadata: { full_name: demoProfile.full_name },
-          app_metadata: {},
-          aud: 'authenticated',
-          created_at: demoProfile.created_at,
-          updated_at: demoProfile.updated_at
-        } as User
-      } as Session);
+        user: demoUser
+      } as Session;
+      
+      setSession(demoSession);
+      console.log('Demo session set:', demoSession);
+      
+      setLoading(false);
+      console.log('Demo admin authentication complete');
+      
       return { error: null };
     }
 
     if (email === 'user@example.com' && password === 'user123') {
+      console.log('Demo user login detected');
       const demoProfile = DEMO_USERS[email];
+      
       setProfile(demoProfile);
-      setUser({
+      
+      const demoUser = {
         id: demoProfile.id,
         email: demoProfile.email,
         user_metadata: { full_name: demoProfile.full_name },
@@ -202,22 +217,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         aud: 'authenticated',
         created_at: demoProfile.created_at,
         updated_at: demoProfile.updated_at
-      } as User);
-      setSession({
+      } as User;
+      
+      setUser(demoUser);
+      
+      const demoSession = {
         access_token: 'demo-user-token',
         refresh_token: 'demo-user-refresh',
         expires_in: 3600,
         token_type: 'bearer',
-        user: {
-          id: demoProfile.id,
-          email: demoProfile.email,
-          user_metadata: { full_name: demoProfile.full_name },
-          app_metadata: {},
-          aud: 'authenticated',
-          created_at: demoProfile.created_at,
-          updated_at: demoProfile.updated_at
-        } as User
-      } as Session);
+        user: demoUser
+      } as Session;
+      
+      setSession(demoSession);
+      setLoading(false);
+      
       return { error: null };
     }
 
@@ -274,8 +288,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (profile) {
         const updatedProfile = { ...profile, ...updates };
         setProfile(updatedProfile);
-        // Note: Removed the problematic DEMO_USERS assignment that was causing TypeScript errors
-        // Demo profile updates are now only stored in local state
       }
       return { error: null };
     }
@@ -293,7 +305,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return { error };
   };
 
+  // Calculate isAdmin based on profile role
   const isAdmin = profile?.role === 'admin';
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Auth State Update:', {
+      loading,
+      user: user ? { id: user.id, email: user.email } : null,
+      profile: profile ? { id: profile.id, email: profile.email, role: profile.role } : null,
+      isAdmin,
+      profileRole: profile?.role
+    });
+  }, [loading, user, profile, isAdmin]);
 
   const value = {
     user,

@@ -22,9 +22,17 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && user && profile) {
+      console.log('Login redirect check:', { 
+        user: user.email, 
+        profile: profile.role, 
+        isAdmin: profile.role === 'admin' 
+      });
+      
       if (profile.role === 'admin') {
+        console.log('Redirecting to admin dashboard');
         navigate('/admin');
       } else {
+        console.log('Redirecting to user dashboard');
         navigate('/dashboard');
       }
     }
@@ -41,34 +49,24 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      // For demo purposes, simulate login with demo credentials
-      if (email === "admin@accessscan.com" && password === "admin123") {
-        showSuccess("Demo admin login successful!");
-        setTimeout(() => {
-          navigate('/admin');
-        }, 1000);
-        return;
-      }
+      console.log('Attempting login with:', { email, password });
       
-      if (email === "user@example.com" && password === "user123") {
-        showSuccess("Demo user login successful!");
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
-        return;
-      }
-
-      // Try real authentication
       const { error } = await signIn(email, password);
       
       if (error) {
+        console.error('Login error:', error);
         showError(error.message || "Login failed. Try using the demo credentials below.");
         return;
       }
 
+      console.log('Login successful, waiting for redirect...');
       showSuccess("Login successful!");
       
+      // Don't manually navigate here - let the useEffect handle it
+      // based on the user's role after authentication completes
+      
     } catch (error) {
+      console.error('Login exception:', error);
       showError("An unexpected error occurred. Please try the demo credentials.");
     } finally {
       setIsLoading(false);
