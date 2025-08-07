@@ -78,11 +78,84 @@ interface WebsiteContent {
   is_active: boolean;
 }
 
+// Mock data for demo mode
+const MOCK_USERS: User[] = [
+  {
+    id: 'demo-admin-uuid-001',
+    email: 'admin@accessscan.com',
+    full_name: 'Admin User',
+    plan: 'agency',
+    plan_status: 'active',
+    role: 'admin',
+    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    last_login: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    scans_used: 25,
+    total_spent: 147.00
+  },
+  {
+    id: 'demo-user-uuid-002',
+    email: 'user@example.com',
+    full_name: 'Demo User',
+    plan: 'pro',
+    plan_status: 'active',
+    role: 'user',
+    created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    last_login: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    scans_used: 7,
+    total_spent: 19.00
+  },
+  {
+    id: 'user-003',
+    email: 'john@company.com',
+    full_name: 'John Smith',
+    plan: 'free',
+    plan_status: 'active',
+    role: 'user',
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    last_login: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    scans_used: 1,
+    total_spent: 0.00
+  }
+];
+
+const MOCK_PLANS: Plan[] = [
+  {
+    id: 'plan-free',
+    name: 'Free',
+    price: 0,
+    scans_per_month: 1,
+    pages_per_scan: 3,
+    features: ['Basic reporting', 'Email support', 'WCAG AA scanning'],
+    is_active: true
+  },
+  {
+    id: 'plan-pro',
+    name: 'Pro',
+    price: 19,
+    scans_per_month: 10,
+    pages_per_scan: 25,
+    features: ['PDF reports', 'Priority support', 'Scan history', 'WCAG AAA scanning'],
+    stripe_price_id: 'price_pro_monthly',
+    is_active: true
+  },
+  {
+    id: 'plan-agency',
+    name: 'Agency',
+    price: 49,
+    scans_per_month: -1,
+    pages_per_scan: -1,
+    features: ['White-label reports', 'API access', 'Team collaboration', 'Phone support'],
+    stripe_price_id: 'price_agency_monthly',
+    is_active: true
+  }
+];
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { profile, isAdmin, loading: authLoading } = useAuth();
+  const { profile, isAdmin, loading: authLoading, user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   // Data states
   const [users, setUsers] = useState<User[]>([]);
@@ -105,6 +178,13 @@ const AdminDashboard = () => {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingContent, setEditingContent] = useState<WebsiteContent | null>(null);
 
+  // Check if we're in demo mode
+  useEffect(() => {
+    if (user && user.id.startsWith('demo-')) {
+      setIsDemoMode(true);
+    }
+  }, [user]);
+
   // Redirect if not admin
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -116,9 +196,81 @@ const AdminDashboard = () => {
   // Load data
   useEffect(() => {
     if (isAdmin) {
-      loadAllData();
+      if (isDemoMode) {
+        loadDemoData();
+      } else {
+        loadAllData();
+      }
     }
-  }, [isAdmin]);
+  }, [isAdmin, isDemoMode]);
+
+  const loadDemoData = () => {
+    setUsers(MOCK_USERS);
+    setPlans(MOCK_PLANS);
+    setAdminConfigs([
+      {
+        id: 'smtp',
+        category: 'email',
+        config_data: {
+          host: 'smtp.example.com',
+          port: 587,
+          username: 'noreply@accessscan.com',
+          encryption: 'tls',
+          fromEmail: 'noreply@accessscan.com',
+          fromName: 'AccessScan'
+        },
+        is_enabled: true
+      },
+      {
+        id: 'billing',
+        category: 'payments',
+        config_data: {
+          provider: 'stripe',
+          currency: 'USD',
+          taxRate: 0,
+          stripePublishableKey: 'pk_test_demo...',
+          stripeSecretKey: 'sk_test_demo...'
+        },
+        is_enabled: true
+      }
+    ]);
+    setWebsiteContent([
+      {
+        id: 'content-1',
+        page: 'home',
+        section: 'hero',
+        title: 'Make Your Website Accessible to Everyone',
+        content: 'Scan your website for ADA/WCAG compliance issues and get actionable reports to improve accessibility for all users.',
+        is_active: true
+      },
+      {
+        id: 'content-2',
+        page: 'pricing',
+        section: 'header',
+        title: 'Simple, Transparent Pricing',
+        content: 'Choose the perfect plan for your accessibility scanning needs.',
+        is_active: true
+      }
+    ]);
+    
+    // Calculate demo stats
+    const totalUsers = MOCK_USERS.length;
+    const activeUsers = MOCK_USERS.filter(u => u.plan_status === 'active').length;
+    const totalRevenue = MOCK_USERS.reduce((sum, u) => sum + u.total_spent, 0);
+    const totalScans = MOCK_USERS.reduce((sum, u) => sum + u.scans_used, 0);
+    const paidUsers = MOCK_USERS.filter(u => u.plan !== 'free').length;
+    
+    setStats({
+      totalUsers,
+      activeUsers,
+      totalRevenue,
+      monthlyRevenue: totalRevenue * 0.6, // Simulate monthly revenue
+      totalScans,
+      avgScore: 82,
+      conversionRate: (paidUsers / totalUsers) * 100,
+      churnRate: 3.2
+    });
+  };
 
   const loadAllData = async () => {
     setIsLoading(true);
@@ -219,10 +371,6 @@ const AdminDashboard = () => {
           avgScore = scanStats.reduce((sum, s) => sum + s.score, 0) / scanStats.length;
         }
 
-        // Calculate monthly revenue (simplified - last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
         const monthlyRevenue = totalRevenue * 0.1; // Simplified calculation
 
         setStats({
@@ -242,6 +390,14 @@ const AdminDashboard = () => {
   };
 
   const handleSaveUser = async (user: User) => {
+    if (isDemoMode) {
+      // Update demo data
+      setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+      setEditingUser(null);
+      showSuccess('Demo user updated successfully');
+      return;
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -265,6 +421,13 @@ const AdminDashboard = () => {
   };
 
   const handleSavePlan = async (plan: Plan) => {
+    if (isDemoMode) {
+      setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
+      setEditingPlan(null);
+      showSuccess('Demo plan updated successfully');
+      return;
+    }
+
     const { error } = await supabase
       .from('plans')
       .update({
@@ -290,6 +453,13 @@ const AdminDashboard = () => {
   };
 
   const handleSaveContent = async (content: WebsiteContent) => {
+    if (isDemoMode) {
+      setWebsiteContent(prev => prev.map(c => c.id === content.id ? content : c));
+      setEditingContent(null);
+      showSuccess('Demo content updated successfully');
+      return;
+    }
+
     const { error } = await supabase
       .from('website_content')
       .update({
@@ -311,6 +481,14 @@ const AdminDashboard = () => {
   };
 
   const handleSaveConfig = async (configId: string, configData: any) => {
+    if (isDemoMode) {
+      setAdminConfigs(prev => prev.map(c => 
+        c.id === configId ? { ...c, config_data: configData } : c
+      ));
+      showSuccess('Demo configuration saved successfully');
+      return;
+    }
+
     const { error } = await supabase
       .from('admin_configs')
       .update({
@@ -334,6 +512,14 @@ const AdminDashboard = () => {
 
     const newStatus = user.plan_status === 'suspended' ? 'active' : 'suspended';
     
+    if (isDemoMode) {
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, plan_status: newStatus } : u
+      ));
+      showSuccess('Demo user status updated');
+      return;
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({ 
@@ -393,7 +579,10 @@ const AdminDashboard = () => {
               <Shield className="w-8 h-8 text-blue-600" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-                <p className="text-sm text-gray-500">AccessScan Platform Management</p>
+                <p className="text-sm text-gray-500">
+                  AccessScan Platform Management
+                  {isDemoMode && <span className="ml-2 text-orange-600 font-medium">(Demo Mode)</span>}
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -411,6 +600,20 @@ const AdminDashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {isDemoMode && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center">
+              <Shield className="w-5 h-5 text-blue-600 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-blue-800">Demo Mode Active</h3>
+                <p className="text-sm text-blue-600">
+                  You're viewing demo data. Changes will be simulated but not persisted to the database.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg">
@@ -574,7 +777,7 @@ const AdminDashboard = () => {
                     <CardTitle>User Management</CardTitle>
                     <CardDescription>Manage user accounts, plans, and permissions</CardDescription>
                   </div>
-                  <Button onClick={loadUsers}>
+                  <Button onClick={isDemoMode ? loadDemoData : loadUsers}>
                     <Database className="w-4 h-4 mr-2" />
                     Refresh
                   </Button>
@@ -658,7 +861,7 @@ const AdminDashboard = () => {
                     <CardTitle>Plan Management</CardTitle>
                     <CardDescription>Configure pricing plans and features</CardDescription>
                   </div>
-                  <Button onClick={loadPlans}>
+                  <Button onClick={isDemoMode ? loadDemoData : loadPlans}>
                     <Database className="w-4 h-4 mr-2" />
                     Refresh
                   </Button>
@@ -764,21 +967,6 @@ const AdminDashboard = () => {
                         value={smtpConfig.username || ''}
                         onChange={(e) => {
                           const newConfig = { ...smtpConfig, username: e.target.value };
-                          setAdminConfigs(prev => prev.map(c => 
-                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
-                          ));
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="smtpPassword">Password</Label>
-                      <Input
-                        id="smtpPassword"
-                        type="password"
-                        value={smtpConfig.password || ''}
-                        onChange={(e) => {
-                          const newConfig = { ...smtpConfig, password: e.target.value };
                           setAdminConfigs(prev => prev.map(c => 
                             c.id === 'smtp' ? { ...c, config_data: newConfig } : c
                           ));
@@ -905,28 +1093,13 @@ const AdminDashboard = () => {
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div>
-                      <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                      <Input
-                        id="taxRate"
-                        type="number"
-                        value={billingConfig.taxRate || 0}
-                        onChange={(e) => {
-                          const newConfig = { ...billingConfig, taxRate: parseFloat(e.target.value) || 0 };
-                          setAdminConfigs(prev => prev.map(c => 
-                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
-                          ));
-                        }}
-                      />
-                    </div>
                   </div>
 
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="stripePublishable">Stripe Publishable Key</Label>
                       <Input
-                        id="stripePublishable"
+                        id="stripe Publishable"
                         type="text"
                         value={billingConfig.stripePublishableKey || ''}
                         onChange={(e) => {
@@ -946,21 +1119,6 @@ const AdminDashboard = () => {
                         value={billingConfig.stripeSecretKey || ''}
                         onChange={(e) => {
                           const newConfig = { ...billingConfig, stripeSecretKey: e.target.value };
-                          setAdminConfigs(prev => prev.map(c => 
-                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
-                          ));
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="webhookSecret">Webhook Secret</Label>
-                      <Input
-                        id="webhookSecret"
-                        type="password"
-                        value={billingConfig.webhookSecret || ''}
-                        onChange={(e) => {
-                          const newConfig = { ...billingConfig, webhookSecret: e.target.value };
                           setAdminConfigs(prev => prev.map(c => 
                             c.id === 'billing' ? { ...c, config_data: newConfig } : c
                           ));
@@ -990,7 +1148,7 @@ const AdminDashboard = () => {
                     <CardTitle>Website Content Management</CardTitle>
                     <CardDescription>Edit website pages content and copy</CardDescription>
                   </div>
-                  <Button onClick={loadWebsiteContent}>
+                  <Button onClick={isDemoMode ? loadDemoData : loadWebsiteContent}>
                     <Database className="w-4 h-4 mr-2" />
                     Refresh
                   </Button>
