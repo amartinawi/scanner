@@ -48,18 +48,6 @@ const Index = () => {
     }, 100);
   };
 
-  const handleDownloadPDF = () => {
-    if (!scanResults) return;
-    
-    // In a real app, this would generate and download a PDF
-    showSuccess("PDF report generation started. Download will begin shortly.");
-    
-    // Simulate PDF generation
-    setTimeout(() => {
-      showSuccess("PDF report downloaded successfully!");
-    }, 2000);
-  };
-
   const handleGetStarted = () => {
     navigate('/signup');
   };
@@ -114,9 +102,7 @@ const Index = () => {
         {scanResults && (
           <div id="scan-results" className="mb-12">
             <ReportViewer 
-              results={scanResults} 
-              onDownloadPDF={handleDownloadPDF}
-              onShare={() => showSuccess("Report link copied to clipboard!")}
+              results={scanResults}
             />
           </div>
         )}

@@ -13,8 +13,11 @@ import {
   Globe,
   TrendingUp,
   AlertTriangle,
-  Info
+  Info,
+  Loader2
 } from "lucide-react";
+import { showSuccess, showError } from "@/utils/toast";
+import { generatePDFReport, generateSimplePDFReport } from "@/utils/pdfGenerator";
 
 interface Issue {
   id: string;
@@ -48,6 +51,7 @@ interface ReportViewerProps {
 
 const ReportViewer = ({ results, onDownloadPDF, onShare }: ReportViewerProps) => {
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -96,6 +100,55 @@ const ReportViewer = ({ results, onDownloadPDF, onShare }: ReportViewerProps) =>
     });
   };
 
+  const handleDownloadPDF = async () => {
+    if (isGeneratingPDF) return;
+    
+    setIsGeneratingPDF(true);
+    
+    try {
+      showSuccess("Generating PDF report...");
+      
+      // Use the detailed PDF generator
+      await generatePDFReport(results);
+      
+      showSuccess("PDF report downloaded successfully!");
+      
+      // Call the optional callback
+      if (onDownloadPDF) {
+        onDownloadPDF();
+      }
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      showError("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: `Accessibility Report for ${results.url}`,
+        text: `Accessibility scan results: Score ${results.score}/100 with ${results.totalIssues} issues found.`,
+        url: window.location.href
+      }).then(() => {
+        showSuccess("Report shared successfully!");
+      }).catch(() => {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(window.location.href);
+        showSuccess("Report link copied to clipboard!");
+      });
+    } else {
+      // Fallback to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      showSuccess("Report link copied to clipboard!");
+    }
+    
+    if (onShare) {
+      onShare();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -116,18 +169,23 @@ const ReportViewer = ({ results, onDownloadPDF, onShare }: ReportViewerProps) =>
               </CardDescription>
             </div>
             <div className="flex space-x-2">
-              {onShare && (
-                <Button variant="outline" onClick={onShare}>
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Share
-                </Button>
-              )}
-              {onDownloadPDF && (
-                <Button onClick={onDownloadPDF}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download PDF
-                </Button>
-              )}
+              <Button variant="outline" onClick={handleShare}>
+                <Share2 className="w-4 h-4 mr-2" />
+                Share
+              </Button>
+              <Button onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
+                {isGeneratingPDF ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PDF
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </CardHeader>
