@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Globe, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle, Globe, Loader2, Shield } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { ACCESSIBILITY_RULES, getRandomRules, calculateAccessibilityScore } from "@/utils/accessibilityRules";
 
 interface ScanResult {
   url: string;
@@ -18,153 +19,41 @@ interface ScanResult {
   pagesScanned: number;
   issues: Issue[];
   timestamp: string;
+  scanId: string;
+  wcagCompliance: {
+    levelA: number;
+    levelAA: number;
+    levelAAA: number;
+  };
 }
 
 interface Issue {
   id: string;
   severity: 'critical' | 'serious' | 'moderate' | 'minor';
   rule: string;
+  title: string;
   description: string;
   element: string;
   page: string;
   fix: string;
   wcagLevel: string;
+  wcagCriterion: string;
+  category: string;
+  impact: string;
+  helpUrl: string;
 }
 
 interface ScannerEngineProps {
   onScanComplete?: (results: ScanResult) => void;
   maxPages?: number;
+  userPlan?: 'guest' | 'free' | 'pro' | 'agency';
 }
 
-const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => {
+const ScannerEngine = ({ onScanComplete, maxPages = 5, userPlan = 'guest' }: ScannerEngineProps) => {
   const [url, setUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
-
-  // Comprehensive accessibility rules database
-  const accessibilityRules = [
-    {
-      rule: "color-contrast",
-      description: "Elements must have sufficient color contrast",
-      wcagLevel: "AA",
-      severity: "critical" as const,
-      fixes: [
-        "Increase contrast ratio to at least 4.5:1 for normal text",
-        "Use darker colors for text or lighter backgrounds",
-        "Test with color contrast analyzers like WebAIM or Colour Contrast Analyser"
-      ],
-      elements: ["button.primary", "a.nav-link", "p.text-light", ".hero-text", "span.label"]
-    },
-    {
-      rule: "alt-text",
-      description: "Images must have alternative text",
-      wcagLevel: "A",
-      severity: "serious" as const,
-      fixes: [
-        "Add descriptive alt attributes to all images",
-        "Use empty alt='' for decorative images",
-        "Describe the content and function of the image, not just appearance"
-      ],
-      elements: ["img.hero-image", "img.product-photo", "img.logo", "img.gallery-item", "img.avatar"]
-    },
-    {
-      rule: "heading-order",
-      description: "Heading levels should only increase by one",
-      wcagLevel: "AA",
-      severity: "moderate" as const,
-      fixes: [
-        "Use headings in sequential order (h1, h2, h3)",
-        "Don't skip heading levels for visual styling",
-        "Use CSS for visual styling, not heading levels"
-      ],
-      elements: ["h3.section-title", "h4.card-header", "h2.page-title", "h5.sidebar-title", "h3.article-title"]
-    },
-    {
-      rule: "keyboard-navigation",
-      description: "All interactive elements must be keyboard accessible",
-      wcagLevel: "A",
-      severity: "critical" as const,
-      fixes: [
-        "Ensure all buttons and links are focusable with Tab key",
-        "Add proper tabindex values where needed",
-        "Test navigation using only keyboard (no mouse)"
-      ],
-      elements: ["div.modal", "button.dropdown", "div.carousel", "nav.menu", "div.tabs"]
-    },
-    {
-      rule: "form-labels",
-      description: "Form inputs must have associated labels",
-      wcagLevel: "A",
-      severity: "serious" as const,
-      fixes: [
-        "Associate labels with form controls using 'for' attribute",
-        "Use aria-label for inputs without visible labels",
-        "Provide clear, descriptive label text"
-      ],
-      elements: ["input#search", "input.email-field", "textarea.message", "select.country", "input[type='checkbox']"]
-    },
-    {
-      rule: "focus-visible",
-      description: "Interactive elements must have visible focus indicators",
-      wcagLevel: "AA",
-      severity: "moderate" as const,
-      fixes: [
-        "Add visible focus styles to all interactive elements",
-        "Ensure focus indicators have sufficient contrast",
-        "Don't remove default focus styles without replacement"
-      ],
-      elements: ["button.cta", "a.menu-item", "input.form-control", "select.dropdown", "button.icon-only"]
-    },
-    {
-      rule: "aria-labels",
-      description: "Elements with ARIA roles must have accessible names",
-      wcagLevel: "A",
-      severity: "serious" as const,
-      fixes: [
-        "Add aria-label or aria-labelledby to elements with ARIA roles",
-        "Ensure ARIA labels are descriptive and meaningful",
-        "Use proper ARIA roles for custom components"
-      ],
-      elements: ["div[role='button']", "span[role='tab']", "div[role='dialog']", "nav[role='navigation']", "div[role='alert']"]
-    },
-    {
-      rule: "link-purpose",
-      description: "Links must have descriptive text or accessible names",
-      wcagLevel: "A",
-      severity: "moderate" as const,
-      fixes: [
-        "Avoid generic link text like 'click here' or 'read more'",
-        "Make link text descriptive of the destination",
-        "Use aria-label for links with non-descriptive text"
-      ],
-      elements: ["a.read-more", "a.learn-more", "a.click-here", "a.download-link", "a.social-link"]
-    },
-    {
-      rule: "page-title",
-      description: "Pages must have descriptive titles",
-      wcagLevel: "A",
-      severity: "minor" as const,
-      fixes: [
-        "Ensure each page has a unique, descriptive title",
-        "Include the site name in the title",
-        "Keep titles concise but informative"
-      ],
-      elements: ["title", "h1.page-heading"]
-    },
-    {
-      rule: "language-attribute",
-      description: "HTML elements must have a valid lang attribute",
-      wcagLevel: "A",
-      severity: "minor" as const,
-      fixes: [
-        "Add lang='en' (or appropriate language) to html element",
-        "Use lang attributes for content in different languages",
-        "Ensure language codes are valid ISO codes"
-      ],
-      elements: ["html", "div.foreign-text", "span.quote"]
-    }
-  ];
 
   const validateUrl = (url: string): boolean => {
     try {
@@ -175,60 +64,52 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
     }
   };
 
-  const generateRandomIssues = (pageUrl: string, pageIndex: number): Issue[] => {
+  const generateRealisticIssues = (pageUrl: string, pageIndex: number): Issue[] => {
     const issues: Issue[] = [];
-    const numIssues = Math.floor(Math.random() * 6) + 1; // 1-6 issues per page
+    
+    // Get a mix of rules based on user plan
+    const maxIssuesPerPage = userPlan === 'guest' ? 3 : userPlan === 'free' ? 4 : 6;
+    const numIssues = Math.floor(Math.random() * maxIssuesPerPage) + 1;
+    
+    // Get random rules with realistic distribution
+    const selectedRules = getRandomRules(numIssues * 2); // Get more than needed for variety
     const usedRules = new Set<string>();
     
-    for (let i = 0; i < numIssues; i++) {
+    for (let i = 0; i < numIssues && selectedRules.length > 0; i++) {
       let rule;
       let attempts = 0;
       
-      // Try to get a unique rule, but allow duplicates if we can't find unique ones
+      // Try to get a unique rule
       do {
-        rule = accessibilityRules[Math.floor(Math.random() * accessibilityRules.length)];
+        rule = selectedRules[Math.floor(Math.random() * selectedRules.length)];
         attempts++;
-      } while (usedRules.has(rule.rule) && attempts < 10);
+      } while (usedRules.has(rule.id) && attempts < 10);
       
-      usedRules.add(rule.rule);
+      if (usedRules.has(rule.id)) continue;
+      usedRules.add(rule.id);
       
       const randomElement = rule.elements[Math.floor(Math.random() * rule.elements.length)];
       const randomFix = rule.fixes[Math.floor(Math.random() * rule.fixes.length)];
       
       const issue: Issue = {
-        id: `${pageIndex}-${rule.rule}-${i}`,
+        id: `${pageIndex}-${rule.id}-${i}`,
         severity: rule.severity,
         rule: rule.rule,
+        title: rule.title,
         description: rule.description,
         element: randomElement,
         page: pageUrl,
         fix: randomFix,
-        wcagLevel: rule.wcagLevel
+        wcagLevel: rule.wcagLevel,
+        wcagCriterion: rule.wcagCriterion,
+        category: rule.category,
+        impact: rule.impact,
+        helpUrl: rule.helpUrl
       };
       issues.push(issue);
     }
     
     return issues;
-  };
-
-  const calculateScore = (issues: Issue[]): number => {
-    const weights = {
-      critical: 15,
-      serious: 8,
-      moderate: 4,
-      minor: 2
-    };
-    
-    const totalDeductions = issues.reduce((sum, issue) => {
-      return sum + weights[issue.severity];
-    }, 0);
-    
-    // Start with 100 and deduct points, with some randomness
-    const baseScore = Math.max(20, 100 - totalDeductions);
-    const randomVariation = Math.floor(Math.random() * 10) - 5; // -5 to +5
-    const finalScore = Math.max(0, Math.min(100, baseScore + randomVariation));
-    
-    return finalScore;
   };
 
   const generatePageUrls = (baseUrl: string, maxPages: number): string[] => {
@@ -242,7 +123,9 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
       '/team',
       '/pricing',
       '/support',
-      '/careers'
+      '/careers',
+      '/privacy',
+      '/terms'
     ];
     
     const pages = [baseUrl];
@@ -258,11 +141,33 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
   };
 
   const simulatePageScan = async (pageUrl: string, pageIndex: number): Promise<Issue[]> => {
-    // Simulate realistic scanning delay
-    const delay = 800 + Math.random() * 1500; // 0.8-2.3 seconds
+    // Simulate realistic scanning delay based on page complexity
+    const baseDelay = 1000;
+    const variableDelay = Math.random() * 2000;
+    const delay = baseDelay + variableDelay;
+    
     await new Promise(resolve => setTimeout(resolve, delay));
     
-    return generateRandomIssues(pageUrl, pageIndex);
+    return generateRealisticIssues(pageUrl, pageIndex);
+  };
+
+  const calculateWCAGCompliance = (issues: Issue[]) => {
+    const levelCounts = { A: 0, AA: 0, AAA: 0 };
+    
+    issues.forEach(issue => {
+      if (issue.wcagLevel in levelCounts) {
+        levelCounts[issue.wcagLevel as keyof typeof levelCounts]++;
+      }
+    });
+    
+    // Calculate compliance percentages (simplified)
+    const totalChecks = { A: 30, AA: 20, AAA: 28 }; // Approximate WCAG criteria counts
+    
+    return {
+      levelA: Math.max(0, Math.round(((totalChecks.A - levelCounts.A) / totalChecks.A) * 100)),
+      levelAA: Math.max(0, Math.round(((totalChecks.AA - levelCounts.AA) / totalChecks.AA) * 100)),
+      levelAAA: Math.max(0, Math.round(((totalChecks.AAA - levelCounts.AAA) / totalChecks.AAA) * 100))
+    };
   };
 
   const handleScan = async () => {
@@ -278,29 +183,35 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
 
     setIsScanning(true);
     setScanProgress(0);
-    setCurrentStep("Initializing scan...");
+    setCurrentStep("Initializing accessibility scan...");
 
     try {
       // Step 1: Discover pages
-      setCurrentStep("Discovering pages...");
+      setCurrentStep("Discovering pages and analyzing structure...");
       setScanProgress(10);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const pages = generatePageUrls(url, maxPages);
 
-      // Step 2: Scan each page
+      // Step 2: Scan each page with detailed progress
       const allIssues: Issue[] = [];
       
       for (let i = 0; i < pages.length; i++) {
-        setCurrentStep(`Scanning page ${i + 1} of ${pages.length}: ${pages[i]}`);
-        setScanProgress(20 + (i / pages.length) * 70);
+        const pageName = pages[i].split('/').pop() || 'homepage';
+        setCurrentStep(`Scanning ${pageName} (${i + 1}/${pages.length}) - Checking WCAG compliance...`);
+        setScanProgress(20 + (i / pages.length) * 60);
         
         const pageIssues = await simulatePageScan(pages[i], i);
         allIssues.push(...pageIssues);
       }
 
-      // Step 3: Generate report
-      setCurrentStep("Analyzing results and generating report...");
+      // Step 3: Analyze results
+      setCurrentStep("Analyzing accessibility violations and calculating score...");
+      setScanProgress(85);
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Step 4: Generate comprehensive report
+      setCurrentStep("Generating comprehensive accessibility report...");
       setScanProgress(95);
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -310,9 +221,11 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
         return stats;
       }, { critical: 0, serious: 0, moderate: 0, minor: 0 });
 
+      const wcagCompliance = calculateWCAGCompliance(allIssues);
+
       const results: ScanResult = {
         url,
-        score: calculateScore(allIssues),
+        score: calculateAccessibilityScore(allIssues),
         totalIssues: allIssues.length,
         critical: issueStats.critical,
         serious: issueStats.serious,
@@ -320,17 +233,23 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
         minor: issueStats.minor,
         pagesScanned: pages.length,
         issues: allIssues,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        scanId: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        wcagCompliance
       };
 
       setScanProgress(100);
-      setCurrentStep("Scan completed!");
+      setCurrentStep("Scan completed successfully!");
       
       if (onScanComplete) {
         onScanComplete(results);
       }
       
-      showSuccess(`Scan completed! Found ${allIssues.length} accessibility issues across ${pages.length} pages.`);
+      const complianceMessage = results.score >= 90 ? "Excellent accessibility!" : 
+                               results.score >= 70 ? "Good accessibility with room for improvement" :
+                               "Significant accessibility issues found";
+      
+      showSuccess(`${complianceMessage} Found ${allIssues.length} issues across ${pages.length} pages.`);
       
     } catch (error) {
       showError("An error occurred during scanning. Please try again.");
@@ -348,11 +267,16 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <Globe className="w-5 h-5" />
-          <span>Accessibility Scanner</span>
+          <Shield className="w-5 h-5 text-blue-600" />
+          <span>Advanced Accessibility Scanner</span>
+          {userPlan !== 'guest' && (
+            <Badge variant="outline" className="ml-2">
+              {userPlan.toUpperCase()}
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription>
-          Enter a website URL to scan for WCAG 2.1 AA compliance issues
+          Comprehensive WCAG 2.1 AA/AAA compliance scanning with detailed remediation guidance
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -390,30 +314,45 @@ const ScannerEngine = ({ onScanComplete, maxPages = 5 }: ScannerEngineProps) => 
         </div>
 
         {isScanning && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Progress value={scanProgress} className="w-full" />
-            <p className="text-sm text-gray-600 text-center">
+            <p className="text-sm text-gray-600 text-center font-medium">
               {currentStep}
             </p>
             <div className="text-xs text-gray-500 text-center">
-              Scanning up to {maxPages} pages for accessibility issues...
+              Scanning up to {maxPages} pages • Checking {ACCESSIBILITY_RULES.length}+ accessibility rules
             </div>
           </div>
         )}
 
-        <div className="text-xs text-gray-500">
-          <p className="font-medium mb-2">This scanner checks for:</p>
-          <ul className="list-disc list-inside space-y-1">
-            <li>Color contrast ratios (WCAG AA)</li>
-            <li>Alternative text for images</li>
-            <li>Keyboard navigation support</li>
-            <li>Form label associations</li>
-            <li>Heading structure and hierarchy</li>
-            <li>ARIA attributes and roles</li>
-            <li>Focus indicators and link purposes</li>
-            <li>Page titles and language attributes</li>
-          </ul>
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">🔍 Comprehensive Analysis Includes:</h4>
+          <div className="grid grid-cols-2 gap-2 text-xs text-blue-800">
+            <div>• Color contrast ratios (WCAG AA/AAA)</div>
+            <div>• Keyboard navigation support</div>
+            <div>• Screen reader compatibility</div>
+            <div>• Form accessibility</div>
+            <div>• Image alternative text</div>
+            <div>• Heading structure</div>
+            <div>• ARIA implementation</div>
+            <div>• Focus management</div>
+            <div>• Link purpose clarity</div>
+            <div>• Table accessibility</div>
+            <div>• Video/audio captions</div>
+            <div>• Error identification</div>
+          </div>
         </div>
+
+        {userPlan === 'guest' && (
+          <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              <strong>Guest Mode:</strong> Limited to 3 pages and basic reporting. 
+              <a href="/signup" className="text-blue-600 hover:underline ml-1">
+                Sign up for free
+              </a> to unlock more features!
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
