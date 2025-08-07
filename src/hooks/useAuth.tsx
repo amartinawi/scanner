@@ -46,42 +46,6 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Demo user data
-const DEMO_USERS = {
-  'admin@accessscan.com': {
-    id: 'demo-admin-id',
-    email: 'admin@accessscan.com',
-    full_name: 'Admin User',
-    avatar_url: null,
-    role: 'admin' as const,
-    plan: 'agency' as const,
-    plan_status: 'active' as const,
-    subscription_id: 'sub_demo_admin',
-    customer_id: 'cus_demo_admin',
-    scans_used: 25,
-    total_spent: 147.00,
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_login: new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  },
-  'user@example.com': {
-    id: 'demo-user-id',
-    email: 'user@example.com',
-    full_name: 'Demo User',
-    avatar_url: null,
-    role: 'user' as const,
-    plan: 'pro' as const,
-    plan_status: 'active' as const,
-    subscription_id: 'sub_demo_user',
-    customer_id: 'cus_demo_user',
-    scans_used: 7,
-    total_spent: 19.00,
-    created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_login: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-  }
-};
-
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -104,6 +68,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       return data;
     } catch (error) {
       console.error('Error fetching profile:', error);
+      return null;
+    }
+  };
+
+  const fetchDemoProfile = async (email: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (error) {
+        console.error('Error fetching demo profile:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching demo profile:', error);
       return null;
     }
   };
@@ -160,25 +144,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Handle demo credentials
+    // Handle demo credentials by fetching from database
     if (email === 'admin@accessscan.com' && password === 'admin123') {
-      const demoProfile = DEMO_USERS[email];
-      setProfile(demoProfile);
-      setUser({
-        id: demoProfile.id,
-        email: demoProfile.email,
-        user_metadata: { full_name: demoProfile.full_name },
-        app_metadata: {},
-        aud: 'authenticated',
-        created_at: demoProfile.created_at,
-        updated_at: demoProfile.updated_at
-      } as User);
-      setSession({
-        access_token: 'demo-token',
-        refresh_token: 'demo-refresh',
-        expires_in: 3600,
-        token_type: 'bearer',
-        user: {
+      const demoProfile = await fetchDemoProfile(email);
+      if (demoProfile) {
+        setProfile(demoProfile);
+        setUser({
           id: demoProfile.id,
           email: demoProfile.email,
           user_metadata: { full_name: demoProfile.full_name },
@@ -186,29 +157,34 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           aud: 'authenticated',
           created_at: demoProfile.created_at,
           updated_at: demoProfile.updated_at
-        } as User
-      } as Session);
-      return { error: null };
+        } as User);
+        setSession({
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: {
+            id: demoProfile.id,
+            email: demoProfile.email,
+            user_metadata: { full_name: demoProfile.full_name },
+            app_metadata: {},
+            aud: 'authenticated',
+            created_at: demoProfile.created_at,
+            updated_at: demoProfile.updated_at
+          } as User
+        } as Session);
+        
+        // Update last login
+        await updateLastLogin(demoProfile.id);
+        return { error: null };
+      }
     }
 
     if (email === 'user@example.com' && password === 'user123') {
-      const demoProfile = DEMO_USERS[email];
-      setProfile(demoProfile);
-      setUser({
-        id: demoProfile.id,
-        email: demoProfile.email,
-        user_metadata: { full_name: demoProfile.full_name },
-        app_metadata: {},
-        aud: 'authenticated',
-        created_at: demoProfile.created_at,
-        updated_at: demoProfile.updated_at
-      } as User);
-      setSession({
-        access_token: 'demo-token',
-        refresh_token: 'demo-refresh',
-        expires_in: 3600,
-        token_type: 'bearer',
-        user: {
+      const demoProfile = await fetchDemoProfile(email);
+      if (demoProfile) {
+        setProfile(demoProfile);
+        setUser({
           id: demoProfile.id,
           email: demoProfile.email,
           user_metadata: { full_name: demoProfile.full_name },
@@ -216,9 +192,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           aud: 'authenticated',
           created_at: demoProfile.created_at,
           updated_at: demoProfile.updated_at
-        } as User
-      } as Session);
-      return { error: null };
+        } as User);
+        setSession({
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: {
+            id: demoProfile.id,
+            email: demoProfile.email,
+            user_metadata: { full_name: demoProfile.full_name },
+            app_metadata: {},
+            aud: 'authenticated',
+            created_at: demoProfile.created_at,
+            updated_at: demoProfile.updated_at
+          } as User
+        } as Session);
+        
+        // Update last login
+        await updateLastLogin(demoProfile.id);
+        return { error: null };
+      }
     }
 
     // Try real authentication for other credentials
@@ -269,12 +263,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: 'No user logged in' };
 
-    // For demo users, just update local state
-    if (user.id.startsWith('demo-')) {
-      if (profile) {
+    // For demo users, update in database
+    if (user.email === 'admin@accessscan.com' || user.email === 'user@example.com') {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (!error && profile) {
         setProfile({ ...profile, ...updates });
       }
-      return { error: null };
+      return { error };
     }
 
     // For real users, update in database
