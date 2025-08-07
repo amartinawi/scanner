@@ -185,13 +185,15 @@ const AdminDashboard = () => {
     }
   }, [user]);
 
-  // Redirect if not admin
+  // Fixed: Only redirect if auth is loaded AND user is not admin
+  // This prevents premature redirects during demo authentication
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
+    if (!authLoading && user && !isAdmin) {
+      console.log('Access denied - User:', user.email, 'IsAdmin:', isAdmin, 'Profile:', profile);
       showError("Access denied. Administrator privileges required.");
       navigate('/login');
     }
-  }, [authLoading, isAdmin, navigate]);
+  }, [authLoading, isAdmin, user, profile, navigate]);
 
   // Load data
   useEffect(() => {
@@ -558,12 +560,29 @@ const AdminDashboard = () => {
   const smtpConfig = adminConfigs.find(c => c.id === 'smtp')?.config_data || {};
   const billingConfig = adminConfigs.find(c => c.id === 'billing')?.config_data || {};
 
-  if (authLoading || !isAdmin) {
+  // Show loading while auth is still loading
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading admin dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show access denied if auth is loaded and user is definitely not admin
+  if (!authLoading && (!user || !isAdmin)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">Administrator privileges required.</p>
+          <Button onClick={() => navigate('/login')}>
+            Return to Login
+          </Button>
         </div>
       </div>
     );
