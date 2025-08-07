@@ -178,35 +178,67 @@ const AdminDashboard = () => {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingContent, setEditingContent] = useState<WebsiteContent | null>(null);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('AdminDashboard - Auth State:', {
+      authLoading,
+      user: user ? { id: user.id, email: user.email } : null,
+      profile: profile ? { id: profile.id, email: profile.email, role: profile.role } : null,
+      isAdmin
+    });
+  }, [authLoading, user, profile, isAdmin]);
+
   // Check if we're in demo mode
   useEffect(() => {
     if (user && user.id.startsWith('demo-')) {
+      console.log('Demo mode detected for user:', user.email);
       setIsDemoMode(true);
     }
   }, [user]);
 
-  // Fixed: Only redirect if auth is loaded AND user is not admin
-  // This prevents premature redirects during demo authentication
+  // Redirect logic - only redirect non-admin users after auth is complete
   useEffect(() => {
-    if (!authLoading && user && !isAdmin) {
-      console.log('Access denied - User:', user.email, 'IsAdmin:', isAdmin, 'Profile:', profile);
-      showError("Access denied. Administrator privileges required.");
-      navigate('/login');
+    // Wait for auth to complete
+    if (authLoading) {
+      console.log('Auth still loading, waiting...');
+      return;
     }
-  }, [authLoading, isAdmin, user, profile, navigate]);
 
-  // Load data
+    // If no user at all, redirect to login
+    if (!user) {
+      console.log('No user found, redirecting to login');
+      navigate('/login');
+      return;
+    }
+
+    // If user exists but is not admin, show access denied
+    if (!isAdmin) {
+      console.log('User is not admin:', { 
+        userEmail: user.email, 
+        profileRole: profile?.role, 
+        isAdmin 
+      });
+      // Don't redirect immediately, let the access denied screen show
+      return;
+    }
+
+    console.log('Admin access granted for:', user.email);
+  }, [authLoading, user, isAdmin, profile, navigate]);
+
+  // Load data when admin access is confirmed
   useEffect(() => {
-    if (isAdmin) {
+    if (!authLoading && isAdmin) {
+      console.log('Loading admin data, demo mode:', isDemoMode);
       if (isDemoMode) {
         loadDemoData();
       } else {
         loadAllData();
       }
     }
-  }, [isAdmin, isDemoMode]);
+  }, [authLoading, isAdmin, isDemoMode]);
 
   const loadDemoData = () => {
+    console.log('Loading demo data...');
     setUsers(MOCK_USERS);
     setPlans(MOCK_PLANS);
     setAdminConfigs([
@@ -272,6 +304,7 @@ const AdminDashboard = () => {
       conversionRate: (paidUsers / totalUsers) * 100,
       churnRate: 3.2
     });
+    console.log('Demo data loaded successfully');
   };
 
   const loadAllData = async () => {
@@ -572,22 +605,43 @@ const AdminDashboard = () => {
     );
   }
 
-  // Only show access denied if auth is loaded and user is definitely not admin
-  if (!authLoading && (!user || !isAdmin)) {
+  // Show access denied only if we have a user but they're not admin
+  if (user && !isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">Administrator privileges required.</p>
-          <Button onClick={() => navigate('/login')}>
-            Return to Login
-          </Button>
+          <p className="text-sm text-gray-500 mb-4">
+            Current user: {user.email} (Role: {profile?.role || 'unknown'})
+          </p>
+          <div className="space-x-2">
+            <Button onClick={() => navigate('/login')}>
+              Return to Login
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/dashboard')}>
+              Go to Dashboard
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // If no user, redirect to login (this should be handled by the useEffect)
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main admin dashboard - only show if user exists and is admin
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
