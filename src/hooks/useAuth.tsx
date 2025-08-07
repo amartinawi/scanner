@@ -26,6 +26,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
@@ -130,6 +131,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return { error };
   };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+    return { error };
+  };
+
   const signUp = async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -171,6 +186,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     isAdmin,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     updateProfile,
