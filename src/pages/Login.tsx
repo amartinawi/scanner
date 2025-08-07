@@ -4,11 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Shield, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,18 +27,38 @@ const Login = () => {
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        showError(error.message || "Login failed");
+        return;
+      }
+
+      showSuccess("Login successful!");
+      
+      // Check if user is admin and redirect accordingly
+      // The auth hook will handle profile loading
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+      
+    } catch (error) {
+      showError("An unexpected error occurred");
+    } finally {
       setIsLoading(false);
-      showSuccess("Login successful! Redirecting...");
-      // In real app, redirect to dashboard
-      window.location.href = "/dashboard";
-    }, 1500);
+    }
   };
 
   const handleGoogleLogin = () => {
     showSuccess("Google login coming soon!");
   };
+
+  // Demo admin credentials info
+  const demoCredentials = [
+    { email: "admin@accessscan.com", password: "admin123", role: "Admin" },
+    { email: "user@example.com", password: "user123", role: "User" }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -70,6 +93,7 @@ const Login = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -86,11 +110,13 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10"
                     required
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff /> : <Eye />}
                   </button>
@@ -99,7 +125,7 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center space-x-2 text-sm">
-                  <input type="checkbox" className="rounded" />
+                  <input type="checkbox" className="rounded" disabled={isLoading} />
                   <span>Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
@@ -108,7 +134,14 @@ const Login = () => {
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Signing in..." : "Sign in"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign in"
+                )}
               </Button>
             </form>
 
@@ -118,6 +151,7 @@ const Login = () => {
                 variant="outline"
                 className="w-full"
                 onClick={handleGoogleLogin}
+                disabled={isLoading}
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -135,6 +169,39 @@ const Login = () => {
                 Sign up
               </Link>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Demo Credentials */}
+        <Card className="mt-6 bg-yellow-50 border-yellow-200">
+          <CardHeader>
+            <CardTitle className="text-sm text-yellow-800">Demo Credentials</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-xs">
+              {demoCredentials.map((cred, index) => (
+                <div key={index} className="flex justify-between items-center p-2 bg-white rounded border">
+                  <div>
+                    <p className="font-medium text-gray-900">{cred.role}</p>
+                    <p className="text-gray-600">{cred.email}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEmail(cred.email);
+                      setPassword(cred.password);
+                    }}
+                    disabled={isLoading}
+                  >
+                    Use
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-yellow-700 mt-3">
+              Click "Use" to auto-fill credentials, then click "Sign in"
+            </p>
           </CardContent>
         </Card>
 

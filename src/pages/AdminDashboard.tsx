@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Settings, 
   Users, 
@@ -30,53 +30,43 @@ import {
   Crown,
   FileText,
   Database,
-  Zap
+  Zap,
+  Loader2
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface User {
   id: string;
-  name: string;
   email: string;
+  full_name: string;
   plan: string;
-  status: 'active' | 'suspended' | 'pending';
-  joinDate: string;
-  lastLogin: string;
-  scansUsed: number;
-  totalSpent: number;
+  plan_status: 'active' | 'suspended' | 'cancelled';
+  role: 'user' | 'admin';
+  created_at: string;
+  last_login: string;
+  scans_used: number;
+  total_spent: number;
 }
 
 interface Plan {
   id: string;
   name: string;
   price: number;
-  scansPerMonth: number | string;
-  pagesPerScan: number | string;
+  scans_per_month: number;
+  pages_per_scan: number;
   features: string[];
-  isActive: boolean;
-  stripePriceId?: string;
+  stripe_price_id?: string;
+  is_active: boolean;
 }
 
-interface SMTPConfig {
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  fromEmail: string;
-  fromName: string;
-  encryption: 'none' | 'tls' | 'ssl';
-  isEnabled: boolean;
-}
-
-interface BillingConfig {
-  provider: 'stripe' | 'paypal' | 'manual';
-  stripePublishableKey: string;
-  stripeSecretKey: string;
-  webhookSecret: string;
-  currency: string;
-  taxRate: number;
-  isEnabled: boolean;
+interface AdminConfig {
+  id: string;
+  category: string;
+  config_data: any;
+  is_enabled: boolean;
 }
 
 interface WebsiteContent {
@@ -85,207 +75,288 @@ interface WebsiteContent {
   section: string;
   title: string;
   content: string;
-  isActive: boolean;
+  is_active: boolean;
 }
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { profile, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Overview Stats
+  // Data states
+  const [users, setUsers] = useState<User[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [adminConfigs, setAdminConfigs] = useState<AdminConfig[]>([]);
+  const [websiteContent, setWebsiteContent] = useState<WebsiteContent[]>([]);
   const [stats, setStats] = useState({
-    totalUsers: 1247,
-    activeUsers: 1089,
-    totalRevenue: 23450,
-    monthlyRevenue: 4890,
-    totalScans: 15678,
-    avgScore: 76,
-    conversionRate: 12.5,
-    churnRate: 3.2
+    totalUsers: 0,
+    activeUsers: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0,
+    totalScans: 0,
+    avgScore: 0,
+    conversionRate: 0,
+    churnRate: 0
   });
-
-  // Users Management
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "user_1",
-      name: "John Doe",
-      email: "john@example.com",
-      plan: "Pro",
-      status: "active",
-      joinDate: "2024-01-15",
-      lastLogin: "2024-01-20",
-      scansUsed: 7,
-      totalSpent: 57.00
-    },
-    {
-      id: "user_2",
-      name: "Jane Smith",
-      email: "jane@company.com",
-      plan: "Agency",
-      status: "active",
-      joinDate: "2023-12-01",
-      lastLogin: "2024-01-19",
-      scansUsed: 45,
-      totalSpent: 294.00
-    },
-    {
-      id: "user_3",
-      name: "Bob Wilson",
-      email: "bob@startup.io",
-      plan: "Free",
-      status: "pending",
-      joinDate: "2024-01-18",
-      lastLogin: "2024-01-18",
-      scansUsed: 1,
-      totalSpent: 0.00
-    }
-  ]);
-
-  // Plans Management
-  const [plans, setPlans] = useState<Plan[]>([
-    {
-      id: "free",
-      name: "Free",
-      price: 0,
-      scansPerMonth: 1,
-      pagesPerScan: 3,
-      features: ["Basic reporting", "Email support", "WCAG AA scanning"],
-      isActive: true
-    },
-    {
-      id: "pro",
-      name: "Pro",
-      price: 19,
-      scansPerMonth: 10,
-      pagesPerScan: 25,
-      features: ["PDF reports", "Priority support", "Scan history", "WCAG AAA scanning"],
-      isActive: true,
-      stripePriceId: "price_1234567890"
-    },
-    {
-      id: "agency",
-      name: "Agency",
-      price: 49,
-      scansPerMonth: "Unlimited",
-      pagesPerScan: "Unlimited",
-      features: ["White-label reports", "API access", "Team collaboration", "Phone support"],
-      isActive: true,
-      stripePriceId: "price_0987654321"
-    }
-  ]);
-
-  // SMTP Configuration
-  const [smtpConfig, setSMTPConfig] = useState<SMTPConfig>({
-    host: "smtp.gmail.com",
-    port: 587,
-    username: "noreply@accessscan.com",
-    password: "",
-    fromEmail: "noreply@accessscan.com",
-    fromName: "AccessScan",
-    encryption: "tls",
-    isEnabled: true
-  });
-
-  // Billing Configuration
-  const [billingConfig, setBillingConfig] = useState<BillingConfig>({
-    provider: "stripe",
-    stripePublishableKey: "pk_test_...",
-    stripeSecretKey: "",
-    webhookSecret: "",
-    currency: "USD",
-    taxRate: 0,
-    isEnabled: true
-  });
-
-  // Website Content
-  const [websiteContent, setWebsiteContent] = useState<WebsiteContent[]>([
-    {
-      id: "hero_title",
-      page: "Homepage",
-      section: "Hero",
-      title: "Main Headline",
-      content: "Make Your Website Accessible to Everyone",
-      isActive: true
-    },
-    {
-      id: "hero_subtitle",
-      page: "Homepage",
-      section: "Hero",
-      title: "Subtitle",
-      content: "Scan your website for ADA/WCAG compliance issues and get actionable reports to improve accessibility for all users.",
-      isActive: true
-    },
-    {
-      id: "pricing_title",
-      page: "Pricing",
-      section: "Header",
-      title: "Page Title",
-      content: "Simple, Transparent Pricing",
-      isActive: true
-    }
-  ]);
 
   // Dialog states
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingContent, setEditingContent] = useState<WebsiteContent | null>(null);
 
-  const handleSaveUser = (user: User) => {
-    setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+  // Redirect if not admin
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      showError("Access denied. Administrator privileges required.");
+      navigate('/login');
+    }
+  }, [authLoading, isAdmin, navigate]);
+
+  // Load data
+  useEffect(() => {
+    if (isAdmin) {
+      loadAllData();
+    }
+  }, [isAdmin]);
+
+  const loadAllData = async () => {
+    setIsLoading(true);
+    try {
+      await Promise.all([
+        loadUsers(),
+        loadPlans(),
+        loadAdminConfigs(),
+        loadWebsiteContent(),
+        loadStats()
+      ]);
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+      showError('Failed to load admin data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error loading users:', error);
+      return;
+    }
+
+    setUsers(data || []);
+  };
+
+  const loadPlans = async () => {
+    const { data, error } = await supabase
+      .from('plans')
+      .select('*')
+      .order('price', { ascending: true });
+
+    if (error) {
+      console.error('Error loading plans:', error);
+      return;
+    }
+
+    setPlans(data || []);
+  };
+
+  const loadAdminConfigs = async () => {
+    const { data, error } = await supabase
+      .from('admin_configs')
+      .select('*');
+
+    if (error) {
+      console.error('Error loading admin configs:', error);
+      return;
+    }
+
+    setAdminConfigs(data || []);
+  };
+
+  const loadWebsiteContent = async () => {
+    const { data, error } = await supabase
+      .from('website_content')
+      .select('*')
+      .order('page', { ascending: true });
+
+    if (error) {
+      console.error('Error loading website content:', error);
+      return;
+    }
+
+    setWebsiteContent(data || []);
+  };
+
+  const loadStats = async () => {
+    try {
+      // Get user stats
+      const { data: userStats } = await supabase
+        .from('profiles')
+        .select('plan, plan_status, total_spent, scans_used');
+
+      // Get scan stats
+      const { data: scanStats } = await supabase
+        .from('scans')
+        .select('score, created_at');
+
+      if (userStats) {
+        const totalUsers = userStats.length;
+        const activeUsers = userStats.filter(u => u.plan_status === 'active').length;
+        const totalRevenue = userStats.reduce((sum, u) => sum + (u.total_spent || 0), 0);
+        const totalScans = userStats.reduce((sum, u) => sum + (u.scans_used || 0), 0);
+        
+        const paidUsers = userStats.filter(u => u.plan !== 'free').length;
+        const conversionRate = totalUsers > 0 ? (paidUsers / totalUsers) * 100 : 0;
+
+        let avgScore = 0;
+        if (scanStats && scanStats.length > 0) {
+          avgScore = scanStats.reduce((sum, s) => sum + s.score, 0) / scanStats.length;
+        }
+
+        // Calculate monthly revenue (simplified - last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const monthlyRevenue = totalRevenue * 0.1; // Simplified calculation
+
+        setStats({
+          totalUsers,
+          activeUsers,
+          totalRevenue,
+          monthlyRevenue,
+          totalScans,
+          avgScore: Math.round(avgScore),
+          conversionRate: Math.round(conversionRate * 10) / 10,
+          churnRate: 3.2 // Placeholder
+        });
+      }
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  const handleSaveUser = async (user: User) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: user.full_name,
+        email: user.email,
+        plan: user.plan,
+        plan_status: user.plan_status,
+        role: user.role,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      showError('Failed to update user');
+      return;
+    }
+
+    await loadUsers();
     setEditingUser(null);
-    showSuccess("User updated successfully");
+    showSuccess('User updated successfully');
   };
 
-  const handleSavePlan = (plan: Plan) => {
-    setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
+  const handleSavePlan = async (plan: Plan) => {
+    const { error } = await supabase
+      .from('plans')
+      .update({
+        name: plan.name,
+        price: plan.price,
+        scans_per_month: plan.scans_per_month,
+        pages_per_scan: plan.pages_per_scan,
+        features: plan.features,
+        stripe_price_id: plan.stripe_price_id,
+        is_active: plan.is_active,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', plan.id);
+
+    if (error) {
+      showError('Failed to update plan');
+      return;
+    }
+
+    await loadPlans();
     setEditingPlan(null);
-    showSuccess("Plan updated successfully");
+    showSuccess('Plan updated successfully');
   };
 
-  const handleSaveContent = (content: WebsiteContent) => {
-    setWebsiteContent(prev => prev.map(c => c.id === content.id ? content : c));
+  const handleSaveContent = async (content: WebsiteContent) => {
+    const { error } = await supabase
+      .from('website_content')
+      .update({
+        title: content.title,
+        content: content.content,
+        is_active: content.is_active,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', content.id);
+
+    if (error) {
+      showError('Failed to update content');
+      return;
+    }
+
+    await loadWebsiteContent();
     setEditingContent(null);
-    showSuccess("Content updated successfully");
+    showSuccess('Content updated successfully');
   };
 
-  const handleSaveSMTP = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      showSuccess("SMTP configuration saved successfully");
-    }, 1000);
+  const handleSaveConfig = async (configId: string, configData: any) => {
+    const { error } = await supabase
+      .from('admin_configs')
+      .update({
+        config_data: configData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', configId);
+
+    if (error) {
+      showError('Failed to save configuration');
+      return;
+    }
+
+    await loadAdminConfigs();
+    showSuccess('Configuration saved successfully');
   };
 
-  const handleSaveBilling = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      showSuccess("Billing configuration saved successfully");
-    }, 1000);
-  };
+  const handleSuspendUser = async (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
 
-  const handleTestSMTP = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      showSuccess("Test email sent successfully!");
-    }, 2000);
-  };
+    const newStatus = user.plan_status === 'suspended' ? 'active' : 'suspended';
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        plan_status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
 
-  const handleSuspendUser = (userId: string) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, status: u.status === 'suspended' ? 'active' : 'suspended' } : u
-    ));
-    showSuccess("User status updated");
+    if (error) {
+      showError('Failed to update user status');
+      return;
+    }
+
+    await loadUsers();
+    showSuccess('User status updated');
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'text-green-600';
       case 'suspended': return 'text-red-600';
-      case 'pending': return 'text-yellow-600';
-      default: return 'text-gray-600';
+      case 'cancelled': return 'text-gray-600';
+      default: return 'text-yellow-600';
     }
   };
 
@@ -293,10 +364,24 @@ const AdminDashboard = () => {
     switch (status) {
       case 'active': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'suspended': return <Ban className="w-4 h-4 text-red-500" />;
-      case 'pending': return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-gray-500" />;
+      case 'cancelled': return <AlertCircle className="w-4 h-4 text-gray-500" />;
+      default: return <AlertCircle className="w-4 h-4 text-yellow-500" />;
     }
   };
+
+  const smtpConfig = adminConfigs.find(c => c.id === 'smtp')?.config_data || {};
+  const billingConfig = adminConfigs.find(c => c.id === 'billing')?.config_data || {};
+
+  if (authLoading || !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading admin dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -326,6 +411,15 @@ const AdminDashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {isLoading && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p>Loading...</p>
+            </div>
+          </div>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -360,12 +454,12 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
-                      <p className="text-2xl font-bold">${stats.monthlyRevenue.toLocaleString()}</p>
+                      <p className="text-2xl font-bold">${stats.monthlyRevenue.toFixed(0)}</p>
                     </div>
                     <DollarSign className="w-8 h-8 text-green-600" />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    ${stats.totalRevenue.toLocaleString()} total
+                    ${stats.totalRevenue.toFixed(0)} total
                   </p>
                 </CardContent>
               </Card>
@@ -404,30 +498,32 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
+                  <CardTitle>System Status</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                      <div>
-                        <p className="text-sm font-medium">New user registration</p>
-                        <p className="text-xs text-gray-500">john@example.com - 2 minutes ago</p>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Database</span>
+                      <Badge variant="default" className="text-green-600">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Connected
+                      </Badge>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <DollarSign className="w-5 h-5 text-blue-500" />
-                      <div>
-                        <p className="text-sm font-medium">Payment received</p>
-                        <p className="text-xs text-gray-500">$19.00 from jane@company.com - 15 minutes ago</p>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">SMTP Service</span>
+                      <Badge variant={smtpConfig.host ? "default" : "secondary"} 
+                             className={smtpConfig.host ? "text-green-600" : "text-yellow-600"}>
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        {smtpConfig.host ? "Configured" : "Needs Setup"}
+                      </Badge>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <BarChart3 className="w-5 h-5 text-purple-500" />
-                      <div>
-                        <p className="text-sm font-medium">Scan completed</p>
-                        <p className="text-xs text-gray-500">example.com scored 85 - 1 hour ago</p>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Billing Integration</span>
+                      <Badge variant={billingConfig.stripePublishableKey ? "default" : "secondary"}
+                             className={billingConfig.stripePublishableKey ? "text-green-600" : "text-yellow-600"}>
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        {billingConfig.stripePublishableKey ? "Connected" : "Needs Setup"}
+                      </Badge>
                     </div>
                   </div>
                 </CardContent>
@@ -435,38 +531,34 @@ const AdminDashboard = () => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>System Status</CardTitle>
+                  <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">SMTP Service</span>
-                      <Badge variant="default" className="text-green-600">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Online
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Stripe Integration</span>
-                      <Badge variant="default" className="text-green-600">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Connected
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Database</span>
-                      <Badge variant="default" className="text-green-600">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Healthy
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Scanner Engine</span>
-                      <Badge variant="default" className="text-green-600">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Running
-                      </Badge>
-                    </div>
+                  <div className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("users")}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Manage Users ({users.length})
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("plans")}
+                    >
+                      <Crown className="w-4 h-4 mr-2" />
+                      Configure Plans ({plans.length})
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("content")}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Edit Content ({websiteContent.length})
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -482,9 +574,9 @@ const AdminDashboard = () => {
                     <CardTitle>User Management</CardTitle>
                     <CardDescription>Manage user accounts, plans, and permissions</CardDescription>
                   </div>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add User
+                  <Button onClick={loadUsers}>
+                    <Database className="w-4 h-4 mr-2" />
+                    Refresh
                   </Button>
                 </div>
               </CardHeader>
@@ -495,6 +587,7 @@ const AdminDashboard = () => {
                       <TableHead>User</TableHead>
                       <TableHead>Plan</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Role</TableHead>
                       <TableHead>Scans Used</TableHead>
                       <TableHead>Total Spent</TableHead>
                       <TableHead>Actions</TableHead>
@@ -505,7 +598,7 @@ const AdminDashboard = () => {
                       <TableRow key={user.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{user.name}</p>
+                            <p className="font-medium">{user.full_name || 'No name'}</p>
                             <p className="text-sm text-gray-500">{user.email}</p>
                           </div>
                         </TableCell>
@@ -517,14 +610,19 @@ const AdminDashboard = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            {getStatusIcon(user.status)}
-                            <span className={`text-sm ${getStatusColor(user.status)}`}>
-                              {user.status}
+                            {getStatusIcon(user.plan_status)}
+                            <span className={`text-sm ${getStatusColor(user.plan_status)}`}>
+                              {user.plan_status}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell>{user.scansUsed}</TableCell>
-                        <TableCell>${user.totalSpent.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'}>
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{user.scans_used}</TableCell>
+                        <TableCell>${user.total_spent.toFixed(2)}</TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
                             <Button
@@ -560,16 +658,16 @@ const AdminDashboard = () => {
                     <CardTitle>Plan Management</CardTitle>
                     <CardDescription>Configure pricing plans and features</CardDescription>
                   </div>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Plan
+                  <Button onClick={loadPlans}>
+                    <Database className="w-4 h-4 mr-2" />
+                    Refresh
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {plans.map((plan) => (
-                    <Card key={plan.id} className={plan.isActive ? "border-blue-200" : "border-gray-200 opacity-60"}>
+                    <Card key={plan.id} className={plan.is_active ? "border-blue-200" : "border-gray-200 opacity-60"}>
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <div>
@@ -579,20 +677,22 @@ const AdminDashboard = () => {
                               {plan.price > 0 && <span className="text-sm font-normal">/month</span>}
                             </div>
                           </div>
-                          <Switch checked={plan.isActive} />
+                          <Badge variant={plan.is_active ? "default" : "secondary"}>
+                            {plan.is_active ? "Active" : "Inactive"}
+                          </Badge>
                         </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2 mb-4">
                           <p className="text-sm">
-                            <strong>Scans:</strong> {plan.scansPerMonth} per month
+                            <strong>Scans:</strong> {plan.scans_per_month === -1 ? 'Unlimited' : plan.scans_per_month} per month
                           </p>
                           <p className="text-sm">
-                            <strong>Pages:</strong> {plan.pagesPerScan} per scan
+                            <strong>Pages:</strong> {plan.pages_per_scan === -1 ? 'Unlimited' : plan.pages_per_scan} per scan
                           </p>
-                          {plan.stripePriceId && (
+                          {plan.stripe_price_id && (
                             <p className="text-xs text-gray-500">
-                              Stripe ID: {plan.stripePriceId}
+                              Stripe ID: {plan.stripe_price_id}
                             </p>
                           )}
                         </div>
@@ -618,6 +718,140 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
 
+          {/* SMTP Tab */}
+          <TabsContent value="smtp">
+            <Card>
+              <CardHeader>
+                <CardTitle>SMTP Configuration</CardTitle>
+                <CardDescription>Configure email delivery settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="smtpHost">SMTP Host</Label>
+                      <Input
+                        id="smtpHost"
+                        value={smtpConfig.host || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, host: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="smtpPort">Port</Label>
+                      <Input
+                        id="smtpPort"
+                        type="number"
+                        value={smtpConfig.port || 587}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, port: parseInt(e.target.value) || 587 };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="smtpUsername">Username</Label>
+                      <Input
+                        id="smtpUsername"
+                        value={smtpConfig.username || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, username: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="smtpPassword">Password</Label>
+                      <Input
+                        id="smtpPassword"
+                        type="password"
+                        value={smtpConfig.password || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, password: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="fromEmail">From Email</Label>
+                      <Input
+                        id="fromEmail"
+                        type="email"
+                        value={smtpConfig.fromEmail || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, fromEmail: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="fromName">From Name</Label>
+                      <Input
+                        id="fromName"
+                        value={smtpConfig.fromName || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...smtpConfig, fromName: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="encryption">Encryption</Label>
+                      <Select 
+                        value={smtpConfig.encryption || 'tls'} 
+                        onValueChange={(value) => {
+                          const newConfig = { ...smtpConfig, encryption: value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'smtp' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="tls">TLS</SelectItem>
+                          <SelectItem value="ssl">SSL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={() => handleSaveConfig('smtp', smtpConfig)} 
+                  disabled={isLoading}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isLoading ? "Saving..." : "Save SMTP Configuration"}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Billing Tab */}
           <TabsContent value="billing">
             <Card>
@@ -630,9 +864,15 @@ const AdminDashboard = () => {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="provider">Payment Provider</Label>
-                      <Select value={billingConfig.provider} onValueChange={(value: any) => 
-                        setBillingConfig(prev => ({ ...prev, provider: value }))
-                      }>
+                      <Select 
+                        value={billingConfig.provider || 'stripe'} 
+                        onValueChange={(value) => {
+                          const newConfig = { ...billingConfig, provider: value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -646,9 +886,15 @@ const AdminDashboard = () => {
 
                     <div>
                       <Label htmlFor="currency">Currency</Label>
-                      <Select value={billingConfig.currency} onValueChange={(value) => 
-                        setBillingConfig(prev => ({ ...prev, currency: value }))
-                      }>
+                      <Select 
+                        value={billingConfig.currency || 'USD'} 
+                        onValueChange={(value) => {
+                          const newConfig = { ...billingConfig, currency: value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -665,11 +911,13 @@ const AdminDashboard = () => {
                       <Input
                         id="taxRate"
                         type="number"
-                        value={billingConfig.taxRate}
-                        onChange={(e) => setBillingConfig(prev => ({ 
-                          ...prev, 
-                          taxRate: parseFloat(e.target.value) || 0 
-                        }))}
+                        value={billingConfig.taxRate || 0}
+                        onChange={(e) => {
+                          const newConfig = { ...billingConfig, taxRate: parseFloat(e.target.value) || 0 };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
                       />
                     </div>
                   </div>
@@ -680,11 +928,13 @@ const AdminDashboard = () => {
                       <Input
                         id="stripePublishable"
                         type="text"
-                        value={billingConfig.stripePublishableKey}
-                        onChange={(e) => setBillingConfig(prev => ({ 
-                          ...prev, 
-                          stripePublishableKey: e.target.value 
-                        }))}
+                        value={billingConfig.stripePublishableKey || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...billingConfig, stripePublishableKey: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
                       />
                     </div>
 
@@ -693,11 +943,13 @@ const AdminDashboard = () => {
                       <Input
                         id="stripeSecret"
                         type="password"
-                        value={billingConfig.stripeSecretKey}
-                        onChange={(e) => setBillingConfig(prev => ({ 
-                          ...prev, 
-                          stripeSecretKey: e.target.value 
-                        }))}
+                        value={billingConfig.stripeSecretKey || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...billingConfig, stripeSecretKey: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
                       />
                     </div>
 
@@ -706,146 +958,25 @@ const AdminDashboard = () => {
                       <Input
                         id="webhookSecret"
                         type="password"
-                        value={billingConfig.webhookSecret}
-                        onChange={(e) => setBillingConfig(prev => ({ 
-                          ...prev, 
-                          webhookSecret: e.target.value 
-                        }))}
+                        value={billingConfig.webhookSecret || ''}
+                        onChange={(e) => {
+                          const newConfig = { ...billingConfig, webhookSecret: e.target.value };
+                          setAdminConfigs(prev => prev.map(c => 
+                            c.id === 'billing' ? { ...c, config_data: newConfig } : c
+                          ));
+                        }}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={billingConfig.isEnabled}
-                    onCheckedChange={(checked) => setBillingConfig(prev => ({ 
-                      ...prev, 
-                      isEnabled: checked 
-                    }))}
-                  />
-                  <Label>Enable Billing System</Label>
-                </div>
-
-                <Button onClick={handleSaveBilling} disabled={isLoading}>
+                <Button 
+                  onClick={() => handleSaveConfig('billing', billingConfig)} 
+                  disabled={isLoading}
+                >
                   <Save className="w-4 h-4 mr-2" />
-                  {isLoading ? "Saving..." : "Save Configuration"}
+                  {isLoading ? "Saving..." : "Save Billing Configuration"}
                 </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* SMTP Tab */}
-          <TabsContent value="smtp">
-            <Card>
-              <CardHeader>
-                <CardTitle>SMTP Configuration</CardTitle>
-                <CardDescription>Configure email delivery settings</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="smtpHost">SMTP Host</Label>
-                      <Input
-                        id="smtpHost"
-                        value={smtpConfig.host}
-                        onChange={(e) => setSMTPConfig(prev => ({ ...prev, host: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="smtpPort">Port</Label>
-                      <Input
-                        id="smtpPort"
-                        type="number"
-                        value={smtpConfig.port}
-                        onChange={(e) => setSMTPConfig(prev => ({ 
-                          ...prev, 
-                          port: parseInt(e.target.value) || 587 
-                        }))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="smtpUsername">Username</Label>
-                      <Input
-                        id="smtpUsername"
-                        value={smtpConfig.username}
-                        onChange={(e) => setSMTPConfig(prev => ({ ...prev, username: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="smtpPassword">Password</Label>
-                      <Input
-                        id="smtpPassword"
-                        type="password"
-                        value={smtpConfig.password}
-                        onChange={(e) => setSMTPConfig(prev => ({ ...prev, password: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="fromEmail">From Email</Label>
-                      <Input
-                        id="fromEmail"
-                        type="email"
-                        value={smtpConfig.fromEmail}
-                        onChange={(e) => setSMTPConfig(prev => ({ ...prev, fromEmail: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="fromName">From Name</Label>
-                      <Input
-                        id="fromName"
-                        value={smtpConfig.fromName}
-                        onChange={(e) => setSMTPConfig(prev => ({ ...prev, fromName: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="encryption">Encryption</Label>
-                      <Select value={smtpConfig.encryption} onValueChange={(value: any) => 
-                        setSMTPConfig(prev => ({ ...prev, encryption: value }))
-                      }>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="tls">TLS</SelectItem>
-                          <SelectItem value="ssl">SSL</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        checked={smtpConfig.isEnabled}
-                        onCheckedChange={(checked) => setSMTPConfig(prev => ({ 
-                          ...prev, 
-                          isEnabled: checked 
-                        }))}
-                      />
-                      <Label>Enable SMTP</Label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex space-x-4">
-                  <Button onClick={handleSaveSMTP} disabled={isLoading}>
-                    <Save className="w-4 h-4 mr-2" />
-                    {isLoading ? "Saving..." : "Save Configuration"}
-                  </Button>
-                  <Button variant="outline" onClick={handleTestSMTP} disabled={isLoading}>
-                    <Mail className="w-4 h-4 mr-2" />
-                    {isLoading ? "Testing..." : "Send Test Email"}
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -859,9 +990,9 @@ const AdminDashboard = () => {
                     <CardTitle>Website Content Management</CardTitle>
                     <CardDescription>Edit website pages content and copy</CardDescription>
                   </div>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Content
+                  <Button onClick={loadWebsiteContent}>
+                    <Database className="w-4 h-4 mr-2" />
+                    Refresh
                   </Button>
                 </div>
               </CardHeader>
@@ -887,8 +1018,8 @@ const AdminDashboard = () => {
                           {content.content}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={content.isActive ? "default" : "secondary"}>
-                            {content.isActive ? "Active" : "Inactive"}
+                          <Badge variant={content.is_active ? "default" : "secondary"}>
+                            {content.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -919,15 +1050,17 @@ const AdminDashboard = () => {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span>Monthly Recurring Revenue</span>
-                      <span className="font-bold">${stats.monthlyRevenue.toLocaleString()}</span>
+                      <span className="font-bold">${stats.monthlyRevenue.toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Annual Run Rate</span>
-                      <span className="font-bold">${(stats.monthlyRevenue * 12).toLocaleString()}</span>
+                      <span className="font-bold">${(stats.monthlyRevenue * 12).toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Average Revenue Per User</span>
-                      <span className="font-bold">${(stats.monthlyRevenue / stats.activeUsers).toFixed(2)}</span>
+                      <span className="font-bold">
+                        ${stats.activeUsers > 0 ? (stats.monthlyRevenue / stats.activeUsers).toFixed(2) : '0.00'}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
@@ -942,19 +1075,19 @@ const AdminDashboard = () => {
                     <div className="flex justify-between items-center">
                       <span>Free Users</span>
                       <span className="font-bold">
-                        {users.filter(u => u.plan === 'Free').length}
+                        {users.filter(u => u.plan === 'free').length}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Pro Users</span>
                       <span className="font-bold">
-                        {users.filter(u => u.plan === 'Pro').length}
+                        {users.filter(u => u.plan === 'pro').length}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Agency Users</span>
                       <span className="font-bold">
-                        {users.filter(u => u.plan === 'Agency').length}
+                        {users.filter(u => u.plan === 'agency').length}
                       </span>
                     </div>
                   </div>
@@ -975,11 +1108,11 @@ const AdminDashboard = () => {
           {editingUser && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="userName">Name</Label>
+                <Label htmlFor="userName">Full Name</Label>
                 <Input
                   id="userName"
-                  value={editingUser.name}
-                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  value={editingUser.full_name}
+                  onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
                 />
               </div>
               <div>
@@ -999,13 +1132,129 @@ const AdminDashboard = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Free">Free</SelectItem>
-                    <SelectItem value="Pro">Pro</SelectItem>
-                    <SelectItem value="Agency">Agency</SelectItem>
+                    <SelectItem value="free">Free</SelectItem>
+                    <SelectItem value="pro">Pro</SelectItem>
+                    <SelectItem value="agency">Agency</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="userRole">Role</Label>
+                <Select value={editingUser.role} onValueChange={(value: 'user' | 'admin') => 
+                  setEditingUser({ ...editingUser, role: value })
+                }>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="userStatus">Status</Label>
+                <Select value={editingUser.plan_status} onValueChange={(value: 'active' | 'suspended' | 'cancelled') => 
+                  setEditingUser({ ...editingUser, plan_status: value })
+                }>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <Button onClick={() => handleSaveUser(editingUser)}>
+                Save Changes
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Plan Dialog */}
+      <Dialog open={!!editingPlan} onOpenChange={() => setEditingPlan(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Plan</DialogTitle>
+            <DialogDescription>Update plan configuration and features</DialogDescription>
+          </DialogHeader>
+          {editingPlan && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="planName">Plan Name</Label>
+                  <Input
+                    id="planName"
+                    value={editingPlan.name}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="planPrice">Price ($)</Label>
+                  <Input
+                    id="planPrice"
+                    type="number"
+                    step="0.01"
+                    value={editingPlan.price}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="scansPerMonth">Scans per Month (-1 for unlimited)</Label>
+                  <Input
+                    id="scansPerMonth"
+                    type="number"
+                    value={editingPlan.scans_per_month}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, scans_per_month: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="pagesPerScan">Pages per Scan (-1 for unlimited)</Label>
+                  <Input
+                    id="pagesPerScan"
+                    type="number"
+                    value={editingPlan.pages_per_scan}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, pages_per_scan: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="stripePriceId">Stripe Price ID</Label>
+                <Input
+                  id="stripePriceId"
+                  value={editingPlan.stripe_price_id || ''}
+                  onChange={(e) => setEditingPlan({ ...editingPlan, stripe_price_id: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="features">Features (one per line)</Label>
+                <Textarea
+                  id="features"
+                  rows={4}
+                  value={editingPlan.features.join('\n')}
+                  onChange={(e) => setEditingPlan({ 
+                    ...editingPlan, 
+                    features: e.target.value.split('\n').filter(f => f.trim()) 
+                  })}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={editingPlan.is_active}
+                  onCheckedChange={(checked) => setEditingPlan({ 
+                    ...editingPlan, 
+                    is_active: checked 
+                  })}
+                />
+                <Label>Active</Label>
+              </div>
+              <Button onClick={() => handleSavePlan(editingPlan)}>
                 Save Changes
               </Button>
             </div>
@@ -1041,10 +1290,10 @@ const AdminDashboard = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <Switch
-                  checked={editingContent.isActive}
+                  checked={editingContent.is_active}
                   onCheckedChange={(checked) => setEditingContent({ 
                     ...editingContent, 
-                    isActive: checked 
+                    is_active: checked 
                   })}
                 />
                 <Label>Active</Label>
